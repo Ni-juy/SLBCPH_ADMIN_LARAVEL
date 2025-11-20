@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\FundExpense;
 use App\Models\Offering;
 use App\Models\Event;
+use Illuminate\Http\Request;
 use App\Models\PrayerRequest; 
 use Illuminate\Support\Facades\Auth;
 
@@ -29,9 +30,17 @@ use Illuminate\Support\Facades\Auth;
         ->where('created_at', '>=', now()->subDays(7))
         ->count();
 
-    $upcomingEvents = Event::where('event_date', '>=', now()->toDateString())
-        ->where('status', 'upcoming')
-        ->count();
+   $upcomingEvents = Event::whereDate('event_date', '>=', now()->toDateString())
+    ->where('status', 'upcoming')
+    ->where(function ($query) use ($branchId) {
+        $query->where('branch_id', $branchId)
+              ->orWhere(function ($q) {
+                  $q->where('is_global', 1);
+                
+              });
+    })
+    ->count();
+
 
     $pendingPrayerRequests = PrayerRequest::where('branch_id', $branchId)
         ->where('status', 'Pending')
@@ -118,17 +127,19 @@ $totalTracksGiven = FaithTrack::where('branch_id', $branchId)
     ]);
 }
 
-
-public function metrics()
+public function metrics(Request $request)
 {
     $user = auth()->user();
     $today = now()->toDateString();
 
-    // --- Upcoming Events (only status = 'upcoming') ---
+    // Use branch filter if provided, otherwise default to user's branch
+    $branchId = $request->query('branch_id') ?? $user->branch_id;
+
+    // --- Upcoming Events (status = 'upcoming') ---
     $upcomingEvents = DB::table('events')
         ->where('status', 'upcoming')
-        ->where(function ($query) use ($user) {
-            $query->where('branch_id', $user->branch_id)
+        ->where(function ($query) use ($branchId) {
+            $query->where('branch_id', $branchId)
                   ->orWhere('is_global', 1);
         })
         ->count();
@@ -138,8 +149,8 @@ public function metrics()
         ->join('events as e', 'ssa.event_id', '=', 'e.id')
         ->where('ssa.member_id', $user->id)
         ->where('ssa.status', 'Attended')
-        ->where(function ($query) use ($user) {
-            $query->where('e.branch_id', $user->branch_id)
+        ->where(function ($query) use ($branchId) {
+            $query->where('e.branch_id', $branchId)
                   ->orWhere('e.is_global', 1);
         })
         ->count();
@@ -148,8 +159,8 @@ public function metrics()
         ->join('events as e', 'ssa.event_id', '=', 'e.id')
         ->where('ssa.member_id', $user->id)
         ->where('ssa.status', 'Missed')
-        ->where(function ($query) use ($user) {
-            $query->where('e.branch_id', $user->branch_id)
+        ->where(function ($query) use ($branchId) {
+            $query->where('e.branch_id', $branchId)
                   ->orWhere('e.is_global', 1);
         })
         ->count();
@@ -163,7 +174,7 @@ public function metrics()
     // --- Financial Summary (parent donations only) ---
     $financialSummary = DB::table('donations')
         ->where('user_id', $user->id)
-        ->where('branch_id', $user->branch_id)
+        ->where('branch_id', $branchId)
         ->whereNull('parent_donation_id')
         ->sum('amount');
 
@@ -175,6 +186,7 @@ public function metrics()
         'financialSummary' => '₱ ' . number_format($financialSummary, 2),
     ]);
 }
+
 
 
 

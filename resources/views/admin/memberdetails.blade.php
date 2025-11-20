@@ -847,12 +847,20 @@
                             <td class="p-3">${req.current_branch}</td>
                             <td class="p-3">${req.requested_branch}</td>
                             <td class="p-3">${req.reason || '—'}</td>
-                            <td class="p-3 text-center">
-                                <button onclick="notifySuperAdmin(${req.id})"
-                                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
-                                    📩
-                                </button>
-                            </td>
+                           <td class="p-3 text-center space-x-2">
+    <!-- Notify Button -->
+    <button onclick="notifySuperAdmin(${req.id})"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+        📩
+    </button>
+
+    <!-- Disapprove Button -->
+    <button onclick="disapproveRequest(${req.id})"
+            class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded">
+        ❌
+    </button>
+</td>
+
                         </tr>`;
 
                         
@@ -875,11 +883,63 @@
             document.getElementById('transferRequestsModal').classList.add('hidden');
         });
 
+        function disapproveRequest(requestId) {
+    Swal.fire({
+        title: 'Are you sure?',
+        text: 'Do you want to disapprove this transfer request?',
+        icon: 'warning',
+        input: 'textarea',
+        inputLabel: 'Reason for disapproval',
+        inputPlaceholder: 'Enter reason here...',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#aaa',
+        confirmButtonText: 'Yes, disapprove',
+        preConfirm: (reason) => {
+            if (!reason) {
+                Swal.showValidationMessage('Please provide a reason for disapproval');
+            }
+            return reason;
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+
+        fetch("{{ route('transfer-requests.disapprove') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            },
+            body: JSON.stringify({
+                request_id: requestId,
+                reason: result.value
+            }),
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.message === 'Request disapproved.') {
+                Swal.fire('Disapproved!', data.message, 'success');
+            } else {
+                Swal.fire('Error', 'Something went wrong.', 'error');
+            }
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 1600);
+        })
+        .catch(error => {
+            console.error('Disapproval Error:', error);
+            Swal.fire('Error', 'Failed to disapprove request.', 'error');
+        });
+    });
+}
+
+
         /* Notify Super Admin */
         function notifySuperAdmin(requestId) {
             Swal.fire({
                 title: 'Are you sure?',
-                text: 'Do you want to notify the Super Admin?',
+                text: 'Do you want to notify the Main Pastor?',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#3085d6',

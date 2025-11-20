@@ -380,9 +380,15 @@ class EventController extends Controller
             ->where(function ($query) use ($branchId) {
                 $query->where('is_global', true)
                       ->orWhere('branch_id', $branchId);
-            })
+            })->where('status', 'upcoming')
             ->get(['start_time', 'end_time']);
         return response()->json($events);
+    }
+
+    public function delete(Event $event)
+    {
+        $event->delete();
+        return response()->json(['success' => true]);
     }
 
     public function bulkDelete(Request $request)

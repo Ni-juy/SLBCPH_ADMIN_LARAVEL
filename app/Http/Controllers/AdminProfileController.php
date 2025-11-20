@@ -10,9 +10,7 @@ use Illuminate\Validation\Rules\Password;
 use App\Http\Controllers\CloudinaryController;
 class AdminProfileController extends Controller
 {
-    /* ============================================================
-     |  Generic helpers – used by both Admin and Super-Admin
-     |============================================================ */
+
     private function validateGeneral(Request $req, $user)
     {
         return $req->validate([
@@ -81,9 +79,7 @@ private function handleImageUpload(Request $req, $user): void
         return back()->with('success', 'Password updated successfully.');
     }
 
-    /* ============================================================
-     |               █  Admin  █  endpoints
-     |============================================================ */
+
     public function show()
     {
         return view('admin.adminprofile', ['user' => Auth::user()]);
@@ -116,10 +112,7 @@ private function handleImageUpload(Request $req, $user): void
         return $this->handlePasswordChange($req, Auth::user());
     }
 
-    /* ============================================================
-     |           █  Super-Admin  █  endpoints
-     |   (route prefix /superadmin/* → these methods)
-     |============================================================ */
+
     public function showSa()
     {
         // super-admin Blade lives in resources/views/superadmin/profile.blade.php

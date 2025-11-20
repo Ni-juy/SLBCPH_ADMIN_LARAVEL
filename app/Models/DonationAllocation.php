@@ -34,4 +34,8 @@ class DonationAllocation extends Model
     return $this->hasMany(FundExpense::class, 'allocation_id');
 }
 
+public function branch() {
+    return $this->belongsTo(Branch::class);
+}
+
 }

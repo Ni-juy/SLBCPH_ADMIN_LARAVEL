@@ -21,6 +21,10 @@
                     <span>Finished</span>
                 </div>
                 <div class="flex items-center gap-2">
+                    <div class="w-4 h-4 bg-yellow-500 rounded"></div>
+                    <span>ongoing</span>
+                </div>
+                <div class="flex items-center gap-2">
                     <div class="w-4 h-4 bg-blue-500 rounded"></div>
                     <span>Upcoming</span>
                 </div>
@@ -48,7 +52,7 @@
 
             <div class="flex justify-between mb-4">
                 <h2 class="text-xl lg:text-2xl font-semibold mb-4">Event List</h2>
-                <button id="trashBtn"
+                <!-- <button id="trashBtn"
                     class="trash-btn bg-red-600 text-white px-4 py-2 rounded transition-all duration-300 flex items-center justify-center cursor-pointer hover:bg-red-700"
                     title="Delete Selected" disabled>
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
@@ -56,7 +60,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2" />
                     </svg>
-                </button>
+                </button> -->
 
                 <style>
                     .trash-btn:hover:not(:disabled) {
@@ -70,7 +74,7 @@
                 <table id="eventsTable" class="w-full border-collapse border bg-white shadow-md rounded-lg">
                     <thead>
                         <tr class="bg-gray-200 text-gray-700 text-center text-md lg:text-xl">
-                            <th class="border p-3"><input type="checkbox" id="selectAll"></th>
+                            <!-- <th class="border p-3"><input type="checkbox" id="selectAll"></th> -->
                             <th class="border p-3">Event Name</th>
                             <th class="border p-3">Date</th>
                             <th class="border p-3">Time</th>
@@ -82,9 +86,9 @@
                     <tbody>
                         @foreach ($events as $event)
                             <tr class="text-center bg-gray-50 hover:bg-gray-100 transition text-md lg:text-lg">
-                                <td class="border p-3">
+                                <!-- <td class="border p-3">
                                     <input type="checkbox" class="event-checkbox" value="{{ $event->id }}">
-                                </td>
+                                </td> -->
                                 <td class="border p-3">
                                     <button class=" hover:underline event-title" data-title="{{ $event->title }}">
                                         {{ \Illuminate\Support\Str::limit($event->title, 15) }}
@@ -170,7 +174,7 @@
 
                     </tbody>
                 </table>
-                                
+
             </div>
             <!-- Event Title Modal -->
             <div id="eventTitleModal"
@@ -186,9 +190,8 @@
                     </div>
                 </div>
             </div>
-            <div class="mt-4">
-                {{ $events->links() }}
-            </div>
+            <div class="mt-4 flex justify-center items-center space-x-2" id="paginationContainer"></div>
+
         </div>
     </div>
 
@@ -466,7 +469,7 @@
 
                     return { domNodes: [container] };
                 },
-                dateClick: function (info) {
+                dateClick: async function (info) {
                     document.getElementById('eventForm').reset();
                     document.getElementById('eventId').value = '';
                     document.getElementById('eventForm').action = "{{ route('events.store') }}";
@@ -475,7 +478,19 @@
                     document.getElementById('event_date').readOnly = true;
                     document.getElementById('formTitle').innerText = "Add Event";
                     document.getElementById('formModal').classList.remove('hidden');
-                    blockTakenTimes(info.dateStr);
+                    await blockTakenTimes(info.dateStr);
+
+                    const takenDiv = document.getElementById('takenTimes');
+                    if (takenRanges.length > 0) {
+                        takenDiv.innerHTML = `<span class="font-semibold text-black">Taken Times:</span><br>` +
+                            takenRanges.map(range => {
+                                return `<span class="inline-block bg-gray-200 text-black px-2 py-1 rounded mr-1 mb-1" style="min-width:120px;text-align:center;">
+                                            ${formatTimeDisplay(range.start)} - ${formatTimeDisplay(range.end)}
+                                        </span>`;
+                            }).join('');
+                    } else {
+                        takenDiv.innerHTML = `<span class="text-green-600">No times taken for this date.</span>`;
+                    }
                     setTimeout(() => {
                         document.getElementById('start_time').focus();
                     }, 200);
@@ -546,6 +561,7 @@
             function bindTableButtons() {
                 document.querySelectorAll('.view-event-btn').forEach(btn => {
                     btn.onclick = () => {
+
                         const ev = JSON.parse(btn.dataset.event);
 
                         document.getElementById('viewTitle').textContent = ev.title;
@@ -560,8 +576,8 @@
 
                         const qrContainer = document.getElementById('eventQrCode');
                         const qrContainerLarge = document.getElementById('eventQrCodeLarge');
-                        qrContainer.innerHTML = ""; 
-                        qrContainerLarge.innerHTML = ""; 
+                        qrContainer.innerHTML = "";
+                        qrContainerLarge.innerHTML = "";
                         const qrUrl = `${ev.id}`;
 
                         new QRCode(qrContainer, {
@@ -575,129 +591,213 @@
                             width: 512,
                             height: 512
                         });
-
                         document.getElementById('viewModal').classList.remove('hidden');
                     };
                 });
 
                 document.querySelectorAll('.edit-event').forEach(btn => {
-                    btn.onclick = () => {
+                    btn.onclick = async () => {
                         const eventId = btn.dataset.id;
-                        fetch(`/admin/events/${eventId}/edit`)
-                            .then(res => res.json())
-                            .then(ev => {
-                                document.getElementById('eventForm').reset();
-                                document.getElementById('eventId').value = ev.id;
-                                document.getElementById('eventForm').action = `/admin/events/${ev.id}`;
-                                document.getElementById('formMethod').value = "PUT";
-                                document.getElementById('title').value = ev.title;
-                                document.getElementById('event_date').value = ev.event_date;
-                                document.getElementById('event_date').readOnly = false;
-                                document.getElementById('start_time').value = ev.start_time;
-                                document.getElementById('end_time').value = ev.end_time;
-                                document.getElementById('location').value = ev.location;
-                                document.getElementById('description').value = ev.description || '';
-                                document.getElementById('formTitle').innerText = "Edit Event";
-                                document.getElementById('formModal').classList.remove('hidden');
-                                blockTakenTimes(ev.event_date);
-                            });
+
+                        try {
+                            const res = await fetch(`/admin/events/${eventId}/edit`);
+                            const ev = await res.json();
+
+                            // Reset form
+                            const form = document.getElementById('eventForm');
+                            form.reset();
+                            document.getElementById('eventId').value = ev.id;
+                            form.action = `/admin/events/${ev.id}`;
+                            document.getElementById('formMethod').value = "PUT";
+                            document.getElementById('title').value = ev.title;
+                            document.getElementById('event_date').value = ev.event_date;
+                            document.getElementById('event_date').readOnly = false;
+                            document.getElementById('start_time').value = ev.start_time;
+                            document.getElementById('end_time').value = ev.end_time;
+                            document.getElementById('location').value = ev.location;
+                            document.getElementById('description').value = ev.description || '';
+                            document.getElementById('formTitle').innerText = "Edit Event";
+                            document.getElementById('formModal').classList.remove('hidden');
+
+                            await blockTakenTimes(ev.event_date);
+                            const eventRow = allEventsData.find(ev2 => ev2.title === ev.title);
+
+                            let filteredRanges = takenRanges;
+                            if (eventRow) {
+                                filteredRanges = takenRanges.filter(range =>
+                                    !(range.start === eventRow.start_time && range.end === eventRow.end_time && range.date === eventRow.event_date)
+                                );
+                            }
+
+                            console.log(filteredRanges);
+                            const takenDiv = document.getElementById('takenTimes');
+                            if (filteredRanges.length > 0) {
+                                takenDiv.innerHTML = `<span class="font-semibold text-black">Taken Times:</span><br>` +
+                                    filteredRanges.map(range => {
+                                        return `<span class="inline-block bg-gray-200 text-black px-2 py-1 rounded mr-1 mb-1" style="min-width:120px;text-align:center;">
+                                                    ${formatTimeDisplay(range.start)} - ${formatTimeDisplay(range.end)}
+                                                </span>`;
+                                    }).join('');
+                            } else {
+                                takenDiv.innerHTML = `<span class="text-green-600">No times taken for this date.</span>`;
+                            }
+
+                        } catch (err) {
+                            console.error('Error fetching event:', err);
+                        }
                     };
                 });
+
+
+                document.querySelectorAll('.event-title').forEach(btn => {
+                    const modal = document.getElementById('eventTitleModal');
+                    const fullTitle = document.getElementById('fullEventTitle');
+                    btn.onclick = () => {
+                        const title = btn.getAttribute('data-title');
+                        fullTitle.textContent = title;
+                        modal.classList.remove('hidden');
+                        modal.classList.add('flex');
+                    };
+                });
+
+                document.querySelectorAll('.delete-event').forEach(btn => {
+                    btn.onclick = (e) => {
+                        const eventId = e.currentTarget.dataset.id;
+
+                        Swal.fire({
+                            title: 'Are you sure?',
+                            text: "This action cannot be undone!",
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            cancelButtonColor: '#3085d6',
+                            confirmButtonText: 'Yes, delete it!',
+                            cancelButtonText: 'Cancel'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                fetch(`/admin/events/${eventId}/delete`)
+                                    .then(response => response.json())
+                                    .then(event => {
+                                        Swal.fire(
+                                            'Deleted!',
+                                            'The event has been deleted.',
+                                            'success'
+                                        ).then(() => {
+                                            window.location.reload();
+                                        });
+                                    });
+                            }
+                        });
+                    };
+                });
+
+
+
+                closeBtn.onclick = () => {
+                    const modal = document.getElementById('eventTitleModal');
+                    modal.classList.remove('flex');
+                    modal.classList.add('hidden');
+                };
+
+
+
+            }
+
+            function renderTablePage(page = 1) {
+                tableBody.innerHTML = '';
+                const start = (page - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const pageItems = eventsData.slice(start, end);
+
+                pageItems.sort((a, b) => {
+                    const statusPriority = { ongoing: 1, upcoming: 2, finished: 3 };
+
+                    if (statusPriority[a.status] !== statusPriority[b.status]) {
+                        return statusPriority[a.status] - statusPriority[b.status];
+                    }
+
+                    const dateA = new Date(a.event_date);
+                    const dateB = new Date(b.event_date);
+                    return dateA - dateB;
+                });
+
+                pageItems.forEach(ev => {
+                    let statusHtml = '';
+                    if (ev.status === 'finished') statusHtml = `<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-semibold">Finished</span>`;
+                    else if (ev.status === 'ongoing') statusHtml = `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-semibold">Ongoing</span>`;
+                    else statusHtml = `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold">Upcoming</span>`;
+
+                    let actionBtn = '';
+                    if (ev.status === 'finished' || ev.status === 'ongoing') {
+                        actionBtn = `<button class="mr-3 view-event-btn bg-blue-500 text-white px-2 py-1 rounded transition-all duration-300 cursor-pointer" data-event='${JSON.stringify(ev)}'><i class="fas fa-eye"></i></button>`;
+                    } else {
+                        actionBtn = `<button class="bg-yellow-500 text-white px-2 py-1 rounded edit-event" data-id="${ev.id}"><i class="fas fa-edit"></i></button>`;
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'text-center bg-gray-50 hover:bg-gray-100 transition text-md lg:text-lg';
+                    tr.innerHTML = `
+                                <td class="border p-3"><button class="hover:underline event-title" data-title="${ev.title}">${ev.title.length > 15 ? ev.title.substring(0, 15) + '...' : ev.title}</button></td>
+                                <td class="border p-3">${ev.event_date}</td>
+                                <td class="border py-10">${ev.start_time ? new Date('1970-01-01T' + ev.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''} - ${ev.end_time ? new Date('1970-01-01T' + ev.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</td>
+                                <td class="border p-3"><button class="hover:underline event-title" data-title="${ev.location}">${ev.location.length > 15 ? ev.location.substring(0, 15) + '...' : ev.location}</button></td>
+                                <td class="border p-3">${statusHtml}</td>
+                                <td class="border p-3">
+                                    ${actionBtn}
+                                    <button class="bg-red-500 text-white px-2 py-1 rounded delete-event" data-id="${ev.id}"><i class="fas fa-trash"></i></button>
+                                </td>
+                            `;
+                    tableBody.appendChild(tr);
+                });
+
+
+                bindTableButtons();
+                renderPagination();
+            }
+
+            function renderPagination() {
+                paginationContainer.innerHTML = '';
+                const totalPages = Math.ceil(eventsData.length / itemsPerPage);
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const btn = document.createElement('button');
+                    btn.textContent = i;
+                    btn.className = `px-3 py-1 rounded ${i === currentPage ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`;
+                    btn.onclick = () => {
+                        currentPage = i;
+                        renderTablePage(currentPage);
+                    };
+                    paginationContainer.appendChild(btn);
+                }
             }
 
             const tableBody = document.querySelector('#eventsTable tbody');
+            // const fullTitle = document.getElementById('fullEventTitle');
+            // const modal = document.getElementById('eventTitleModal');
+            // const closeBtn = document.getElementById('closeEventTitleModal');
+
             const source = new EventSource('/events');
+
+            let eventsData = [];
+            let currentPage = 1;
+            const itemsPerPage = 5;
+
             source.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
 
                     data.events.forEach(ev => {
-                        let bgColor = '#3b82f6';
-                        if (ev.status === 'finished') bgColor = '#22c55e';
-                        else if (ev.status === 'ongoing') bgColor = '#f59e0b';
-
-                        const existing = calendar.getEventById(ev.id);
-
-                        if (existing) {
-                            existing.setProp('title', ev.title);
-                            existing.setStart(ev.event_date + (ev.start_time ? 'T' + ev.start_time : ''));
-                            existing.setEnd(ev.event_date + (ev.end_time ? 'T' + ev.end_time : ''));
-                            existing.setProp('backgroundColor', bgColor);
-                            existing.setProp('borderColor', bgColor);
-                            existing.setExtendedProp('status', ev.status);
-                            for (const key in ev) {
-                                if (!['id', 'title', 'start_time', 'end_time', 'event_date'].includes(key)) {
-                                    existing.setExtendedProp(key, ev[key]);
-                                }
-                            }
+                        const index = eventsData.findIndex(e => e.id === ev.id);
+                        if (index > -1) {
+                            eventsData[index] = ev;
+                            allEventsData[index] = ev;
                         } else {
-                            calendar.addEvent({
-                                id: ev.id,
-                                title: ev.title,
-                                start: ev.event_date + (ev.start_time ? 'T' + ev.start_time : ''),
-                                end: ev.event_date + (ev.end_time ? 'T' + ev.end_time : ''),
-                                backgroundColor: bgColor,
-                                borderColor: bgColor,
-                                textColor: '#fff',
-                                allDay: false,
-                                display: 'block',
-                                extendedProps: { ...ev }
-                            });
+                            eventsData.push(ev);
+                            allEventsData.push(ev);
                         }
                     });
 
-
-                    const existingRows = {};
-                    if (!tableBody) return;
-                    tableBody.querySelectorAll('tr').forEach(tr => {
-                        const checkbox = tr.querySelector('.event-checkbox');
-                        if (checkbox) existingRows[checkbox.value] = tr;
-                    });
-
-                    data.events.forEach(ev => {
-                        const rowExists = existingRows[ev.id];
-
-                        let statusHtml = '';
-                        if (ev.status === 'finished') {
-                            statusHtml = `<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-semibold">Finished</span>`;
-                        } else if (ev.status === 'ongoing') {
-                            statusHtml = `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-semibold">Ongoing</span>`;
-                        } else {
-                            statusHtml = `<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-semibold">Upcoming</span>`;
-                        }
-
-                        let actionBtn = '';
-                        if (ev.status === 'finished' || ev.status === 'ongoing') {
-                            actionBtn = `<button class="view-event-btn bg-blue-500 text-white px-4 py-2 rounded transition-all duration-300 cursor-pointer" data-event='${JSON.stringify(ev)}'>View</button>`;
-                        } else {
-                            actionBtn = `<button class="bg-yellow-500 text-white px-4 py-2 rounded edit-event" data-id="${ev.id}">Edit</button>`;
-                        }
-
-                        if (rowExists) {
-                            rowExists.querySelector('td:nth-child(2) button').textContent = ev.title.length > 15 ? ev.title.substring(0, 15) + '...' : ev.title;
-                            rowExists.querySelector('td:nth-child(3)').textContent = ev.event_date;
-                            rowExists.querySelector('td:nth-child(4)').textContent = 
-                                (ev.start_time ? new Date('1970-01-01T' + ev.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '') +
-                                ' - ' +
-                                (ev.end_time ? new Date('1970-01-01T' + ev.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '');
-                            rowExists.querySelector('td:nth-child(5) button').textContent = ev.location.length > 15 ? ev.location.substring(0,15)+'...' : ev.location;
-                            rowExists.querySelector('td:nth-child(6)').innerHTML = statusHtml;
-                            rowExists.querySelector('td:nth-child(7)').innerHTML = actionBtn;
-                        } else {
-                            const tr = document.createElement('tr');
-                            tr.className = 'text-center bg-gray-50 hover:bg-gray-100 transition text-md lg:text-lg';
-                            tr.innerHTML = `
-                                <td class="border p-3"><input type="checkbox" class="event-checkbox" value="${ev.id}"></td>
-                                <td class="border p-3"><button class="hover:underline event-title" data-title="${ev.title}">${ev.title.length > 15 ? ev.title.substring(0,15)+'...' : ev.title}</button></td>
-                                <td class="border p-3">${ev.event_date}</td>
-                                <td class="border py-10">${ev.start_time ? new Date('1970-01-01T'+ev.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''} - ${ev.end_time ? new Date('1970-01-01T'+ev.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</td>
-                                <td class="border p-3"><button class="hover:underline event-title" data-title="${ev.location}">${ev.location.length > 15 ? ev.location.substring(0,15)+'...' : ev.location}</button></td>
-                                <td class="border p-3">${statusHtml}</td>
-                                <td class="border p-3">${actionBtn}</td>
-                            `;
-                            tableBody.appendChild(tr);
-                        }
-                    });
+                    renderTablePage(currentPage);
 
                     document.querySelectorAll('.view-event-btn').forEach(btn => {
                         btn.onclick = () => {
@@ -709,8 +809,6 @@
                             const eventId = btn.dataset.id;
                         };
                     });
-
-                    bindTableButtons();
                 } catch (err) {
                     console.error('Error parsing SSE data:', err);
                 }
@@ -768,7 +866,7 @@
                 });
             });
 
-       
+
         });
 
 
@@ -782,33 +880,20 @@
 
         let takenRanges = [];
 
-        function blockTakenTimes(date) {
+        async function blockTakenTimes(date) {
             document.getElementById('start_time').disabled = true;
             document.getElementById('end_time').disabled = true;
 
-            fetch(`/admin/events/taken-times?date=${date}`)
+            await fetch(`/admin/events/taken-times?date=${date}`)
                 .then(response => response.json())
                 .then(events => {
                     takenRanges = events.map(e => ({
                         start: e.start_time,
-                        end: e.end_time
+                        end: e.end_time,
+                        date
                     }));
                     document.getElementById('start_time').disabled = false;
                     document.getElementById('end_time').disabled = false;
-
-                    // Show taken times visually
-                    const takenDiv = document.getElementById('takenTimes');
-                    if (takenRanges.length > 0) {
-                        takenDiv.innerHTML = `<span class="font-semibold text-black">Taken Times:</span><br>` +
-                            takenRanges.map(range => {
-                                // Format as h:mm AM/PM
-                                return `<span class="inline-block bg-gray-200 text-black px-2 py-1 rounded mr-1 mb-1" style="min-width:120px;text-align:center;">
-                            ${formatTimeDisplay(range.start)} - ${formatTimeDisplay(range.end)}
-                        </span>`;
-                            }).join('');
-                    } else {
-                        takenDiv.innerHTML = `<span class="text-green-600">No times taken for this date.</span>`;
-                    }
                 });
         }
 
@@ -823,20 +908,21 @@
             return `${hour}:${minute} ${ampm}`;
         }
 
-        document.getElementById('event_date').addEventListener('change', function () {
-            blockTakenTimes(this.value);
-        });
+        // document.getElementById('event_date').addEventListener('change', function () {
+        //     blockTakenTimes(this.value);
+        // });
 
-        // Also call blockTakenTimes when the modal opens with the default date
-        document.addEventListener('DOMContentLoaded', function () {
-            const dateInput = document.getElementById('event_date');
-            if (dateInput.value) {
-                blockTakenTimes(dateInput.value);
-            }
-        });
+        // // Also call blockTakenTimes when the modal opens with the default date
+        // document.addEventListener('DOMContentLoaded', function () {
+        //     const dateInput = document.getElementById('event_date');
+        //     if (dateInput.value) {
+        //         blockTakenTimes(dateInput.value);
+        //     }
+        // });
 
         document.getElementById('start_time').addEventListener('change', validateTime);
         document.getElementById('end_time').addEventListener('change', validateTime);
+
 
         function showTimeError(message) {
             const errorDiv = document.getElementById('timeError');
@@ -850,19 +936,33 @@
             errorDiv.classList.add('hidden');
         }
 
+        let allEventsData = [];
+
         function validateTime() {
+            const title = document.getElementById("title").value;
             const start = document.getElementById('start_time').value;
             const end = document.getElementById('end_time').value;
+            const event_date = document.getElementById("event_date").value; // YYYY-MM-DD
 
             if (!start || !end) {
                 hideTimeError();
                 return;
             }
 
-            // Check for overlap
-            const overlap = takenRanges.some(range =>
-                (start < range.end && end > range.start)
+            const eventRow = allEventsData.find(ev => ev.title === title && ev.event_date === event_date);
+
+            let filteredRanges = takenRanges;
+            if (eventRow) {
+                filteredRanges = takenRanges.filter(range =>
+                    !(range.start === eventRow.start_time && range.end === eventRow.end_time && range.date === event_date)
+                );
+            }
+
+            const overlap = filteredRanges.some(range =>
+                start < range.end && end > range.start
             );
+
+
 
             if (overlap) {
                 showTimeError('The selected time slot is already taken. Please choose a different time.');
@@ -873,18 +973,20 @@
             }
         }
 
-        // Prevent form submission if overlap is detected
-        document.getElementById('eventForm').addEventListener('submit', function (e) {
-            const start = document.getElementById('start_time').value;
-            const end = document.getElementById('end_time').value;
-            const overlap = takenRanges.some(range =>
-                (start < range.end && end > range.start)
-            );
-            if (overlap) {
-                showTimeError('The selected time slot is already taken. Please choose a different time.');
-                e.preventDefault();
-            }
-        });
+
+
+        // // Prevent form submission if overlap is detected
+        // document.getElementById('eventForm').addEventListener('submit', function (e) {
+        //     const start = document.getElementById('start_time').value;
+        //     const end = document.getElementById('end_time').value;
+        //     const overlap = takenRanges.some(range =>
+        //         (start < range.end && end > range.start)
+        //     );
+        //     if (overlap) {
+        //         showTimeError('The selected time slot is already taken. Please choose a different time.');
+        //         e.preventDefault();
+        //     }
+        // });
 
 
         document.getElementById('selectAll').addEventListener('change', function () {
@@ -992,7 +1094,7 @@
                         confirmButtonText: 'OK'
                     });
                 @endif
-                    });
+                                            });
 
         @endif
 
@@ -1006,7 +1108,7 @@
                         text: 'Your event has been successfully updated.',
                         confirmButtonText: 'OK'
                     });
-                    });
+                                            });
 
         @endif
 
@@ -1019,7 +1121,7 @@
                             text: 'The event has been deleted.',
                             confirmButtonText: 'OK'
                         });
-                    });
+                                            });
 
 
 

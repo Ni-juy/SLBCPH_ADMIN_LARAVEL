@@ -20,7 +20,7 @@
                     <th class="border px-4 py-2 font-semibold">Month</th>
                     <th class="border px-4 py-2 font-semibold">Amount</th>
                 </tr>
-            </thead >
+            </thead>
             <tbody class="income-table-body"></tbody>
         </table>
     </div>
@@ -72,7 +72,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-        const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
         // Chart Instances
         const incomeExpenseChart = new Chart(document.getElementById('incomeExpenseChart').getContext('2d'), {
@@ -114,8 +114,8 @@
             options: { responsive: true }
         });
 
-            
-     
+
+
 
 
         const yearSelect = document.getElementById('yearFilterChart');
@@ -132,7 +132,12 @@
                 tbody.innerHTML += `
                     <tr>
                         <td class="border px-4 py-2 text-center">${months[index]}</td>
-                        <td class="border px-4 py-2 text-right">₱${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+<td class="border px-4 py-2">
+    <div class="flex justify-between w-full">
+        <span>₱</span>
+        <span>${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+    </div>
+</td>
                     </tr>
                 `;
             });

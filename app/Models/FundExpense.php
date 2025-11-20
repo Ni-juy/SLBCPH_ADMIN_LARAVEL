@@ -17,6 +17,10 @@ class FundExpense extends Model
         'image',
     ];
 
+    public function donationAllocation() {
+    return $this->belongsTo(DonationAllocation::class, 'allocation_id');
+}
+
     public function allocation()
     {
         return $this->belongsTo(\App\Models\DonationAllocation::class, 'allocation_id');

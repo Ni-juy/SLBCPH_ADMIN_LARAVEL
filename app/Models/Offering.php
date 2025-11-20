@@ -17,6 +17,8 @@ class Offering extends Model
         'branch_id',
         'parent_id',
         'user_id',
+        'created_at',
+        'updated_at'
     ];
 
     /**
@@ -42,4 +44,6 @@ class Offering extends Model
     {
         return $this->belongsTo(Offering::class, 'parent_id');
     }
+
+    public $timestamps = false;
 }

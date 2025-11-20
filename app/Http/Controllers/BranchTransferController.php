@@ -159,6 +159,22 @@ class BranchTransferController extends Controller
         return view('superadmin.members', compact('members', 'forwardedRequests', 'approvedTransfers'));
     }
 
+public function disapprove(Request $request)
+{
+    $transferRequest = BranchTransferRequest::find($request->request_id);
+
+    if (!$transferRequest) {
+        return response()->json(['message' => 'Request not found.'], 404);
+    }
+
+    // Update status and save reason
+    $transferRequest->update([
+        'status' => 'disapproved',
+        'disapproval_reason' => $request->reason, // make sure this column exists
+    ]);
+
+    return response()->json(['message' => 'Request disapproved.']);
+}
 
 
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\SundayServiceAttendanceController;
 use App\Http\Controllers\UserEventController;
 use App\Http\Controllers\CloudinaryController;
+use App\Models\Transparency;
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -165,5 +166,39 @@ Route::middleware('auth:sanctum')->post('/user/image', [AuthController::class, '
 Route::middleware('auth:sanctum')->get('/users', function (Request $request) {
     return $request->user();
 });
+
+Route::post('/send-financial-report', [FinancialReportController::class, 'sendPDF'])->middleware('auth:sanctum');
+
+Route::get('/transparency', function () {
+    $branchId = request()->query('id');
+
+    if (!$branchId || !is_numeric($branchId)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid branch ID.'
+        ], 400);
+    }
+
+    $transparency = Transparency::where('branch_id', $branchId)->first();
+
+    if ($transparency && $transparency->pdf_link) {
+        return response()->json([
+            'success' => true,
+            'pdf_link' => $transparency->pdf_link,
+        ]);
+    } else {
+        return response()->json([
+            'success' => false,
+            'message' => 'Transparency report not found for this branch.',
+        ], 404);
+    }
+});
+
+use App\Http\Controllers\DashboardController;
+
+Route::middleware('auth:sanctum')->get('/dashboard-metrics', [DashboardController::class, 'metrics']);
+
+Route::middleware('auth:sanctum')->get('/transparency-info', [FinancialReportController::class, 'getTransparencyInfo']);
+
 
 

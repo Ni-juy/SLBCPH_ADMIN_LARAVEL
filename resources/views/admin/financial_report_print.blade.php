@@ -160,7 +160,11 @@
                 <tr>
                     <td>{{ date('F j, Y', strtotime($item->date)) }}</td>
                     <td>{{ $item->category }}</td>
-                    <td style="">&#8369;{{ number_format($item->amount, 2) }}</td>
+                  <td style="text-align: right;">
+    <span style="float: left;">&#8369;</span>
+    {{ number_format($item->amount, 2) }}
+</td>
+
                 </tr>
             @endforeach
         </tbody>
@@ -183,7 +187,10 @@
                     <td>{{ date('F j, Y', strtotime($item->date)) }}</td>
                     <td>{{ $item->category }}</td>
                     <td>{{ $item->description }}</td>
-                    <td>&#8369;{{ number_format($item->amount, 2) }}</td>
+  <td style="text-align: right;">
+    <span style="float: left;">&#8369;</span>
+    {{ number_format($item->amount, 2) }}
+</td>
                 </tr>
             @endforeach
         </tbody>

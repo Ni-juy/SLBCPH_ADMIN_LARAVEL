@@ -17,6 +17,27 @@ use Illuminate\Support\Facades\DB;
 
 class FinancialManagerController extends Controller
 {
+    public function addOfferings(Request $request) {
+
+        $branchId = Auth::user()->branch_id;
+
+        return response()->json(['success' => true, 'message' => 'Partition added successfully!',
+            'category' => $request->input('category'),
+            'parent_id' => $request->input('parent_id'),
+            'branch_id' => $branchId,
+            'user_id' => Auth::id(),
+        ]);
+
+        Offering::create([
+            'category' => $request->input('category'),
+            'parent_id' => $request->input('parent_id'),
+            'branch_id' => $branchId,
+            'user_id' => Auth::id(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Partition added successfully!']);
+    }
+
     public function index(Request $request)
     {
         $branchId = Auth::user()->branch_id;
@@ -27,7 +48,7 @@ class FinancialManagerController extends Controller
 
 
         $offerings = Offering::where('branch_id', $branchId)
-                         ->whereHas('partitions') // only offerings with setup
+                        //  ->whereHas('partitions') // only offerings with setup
                          ->get();
 
 
@@ -125,7 +146,6 @@ $funds = $funds->filter(function ($fund) use ($subCategories) {
             'amount' => $donation->children->sum('amount'),
         ];
     });
-
         return view('admin.financialtracking', compact(
             'partitions',
             'offerings',
@@ -139,7 +159,8 @@ $funds = $funds->filter(function ($fund) use ($subCategories) {
             'funds',
             'categoryFilter',
             'donationConfirmations',
-            'recentDonations'
+            'recentDonations',
+            'branchId'
         ));
     }
 
@@ -194,24 +215,31 @@ public function saveOfferings(Request $request)
     $request->validate([
         'offerings.*.category' => 'required|string|max:255',
         'offerings.*.parent_id' => 'nullable|exists:offerings,id',
-        'offerings.*.branch_id' => 'required|exists:branches,id', // Ensure branch_id is required
     ]);
 
     try {
         Log::info('Saving offerings data:', $request->offerings);
 
+        $branchId = Auth::user()->branch_id;
         foreach ($request->offerings as $data) {
-            // Assign user_id
             $data['user_id'] = Auth::id();
 
-            // Save offering
+
             if (isset($data['id'])) {
                 $offering = Offering::find($data['id']);
                 if ($offering) {
                     $offering->update($data);
                 }
+
             } else {
-                Offering::create($data);
+                Offering::create([
+                    'category' => $data['category'],
+                    'parent_id' => $data['parent_id'],
+                    'branch_id' => $branchId,
+                    'user_id' => $data['user_id'],
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
             }
         }
 
@@ -362,10 +390,25 @@ public function saveOfferings(Request $request)
         return response()->json(['success' => false, 'error' => 'Expense not found.'], 404);
     }
 
+
+    //MAMAYA PA
     public function deletePartition($id)
     {
+        $branchId = Auth::user()->branch_id;
         $partition = Partition::find($id);
+        $general = Partition::where('category', 'GENERAL')->where( 'branch_id', $branchId)->get()[0];
         if ($partition) {
+            $amount = 0;
+            $donations = DonationAllocation::where('partition_id', $partition->id)->get();
+
+            foreach ($donations as $donation) {
+                $amount += floatval($donation->allocated_amount);
+            }
+
+            $donations2 = DonationAllocation::where('partition_id', $general->id)->first();
+            $donations2->allocated_amount = floatval($donations2->allocated_amount) + $amount;
+            $donations2->save();
+
             $partition->delete();
             return response()->json(['success' => true]);
         }
@@ -382,4 +425,6 @@ public function saveOfferings(Request $request)
         }
         return response()->json(['success' => false, 'error' => 'Offering not found.'], 404);
     }
+
+    
 }

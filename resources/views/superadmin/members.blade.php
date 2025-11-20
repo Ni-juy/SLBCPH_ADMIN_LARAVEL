@@ -31,7 +31,7 @@
                         <td class="border px-4 py-2 text-center">{{ $request->created_at->format('F j, Y') }}</td>
                         <td class="border px-4 py-2 flex justify-center gap-2">
                             <button onclick="approve({{ $request->id }})" class="bg-green-600 text-white px-3 py-1 rounded">Approve</button>
-                            <button onclick="reject({{ $request->id }})" class="bg-red-600 text-white px-3 py-1 rounded">Disapprove</button>
+                        
                         </td>
                     </tr>
                 @empty

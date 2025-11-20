@@ -20,7 +20,7 @@
             ['title' => 'Total Members', 'value' => $totalMembers, 'icon' => 'users', 'color' => 'red-400', 'textColor' => 'black-600'], 
             ['title' => 'New Members', 'value' => $newMembers, 'icon' => 'user-plus', 'color' => 'red-400', 'textColor' => 'black-600'],
             ['title' => 'Pending Prayer Requests', 'value' => $pendingPrayerRequests, 'icon' => 'pray', 'color' => 'red-400', 'textColor' => 'black-600'],
-            ['title' => 'Financial Record', 'value' => '₱' . number_format($totalCurrentFund, 2), 'icon' => 'coins', 'color' => 'red-400', 'textColor' => 'black-600'],
+            ['title' => 'Current Fund', 'value' => '₱' . number_format($totalCurrentFund, 2), 'icon' => 'coins', 'color' => 'red-400', 'textColor' => 'black-600'],
             ['title' => 'Upcoming Events', 'value' => $upcomingEvents, 'icon' => 'calendar-day', 'color' => 'red-400', 'textColor' => 'black-600'],
             ['title' => 'Total Faith Shared', 'value' => $totalFaithShared, 'icon' => 'hands-praying', 'color' => 'red-400', 'textColor' => 'black-600'],
             ['title' => 'Total Tracks Given', 'value' => $totalTracksGiven, 'icon' => 'file-alt', 'color' => 'red-400', 'textColor' => 'black-600'],

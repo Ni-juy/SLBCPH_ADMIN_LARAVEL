@@ -76,30 +76,10 @@
 </div>
 
 
-    <!-- Fund Summary -->
-    <div class="mb-6 p-4 border rounded bg-gray-50">
-        <h4 class="text-lg lg:text-2xl font-semibold mb-2">Current Year Fund</h4>
-        <table class="w-full border text-base lg:text-lg text-center">
-            <thead class="bg-gray-700 text-white">
-                <tr>
-                    <th class="border px-2 py-1">Category</th>
-                    <th class="border px-2 py-1">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                <template x-for="f in funds">
-                    <tr>
-                        <td class="border px-2 py-1" x-text="f.category"></td>
-                        <td class="border px-2 py-1 text-right" x-text="formatCurrency(f.total)"></td>
-                    </tr>
-                </template>
-            </tbody>
-        </table>
-    </div>
 
     <!-- Net Income -->
     <div class="mb-6 p-4 border rounded bg-gray-50">
-        <h4 class="text-lg lg:text-2xl font-semibold mb-2">Net Income</h4>
+        <h4 class="text-lg lg:text-2xl font-semibold mb-2">Current Fund</h4>
         <table class="w-full border text-base lg:text-lg text-center">
             <thead class="bg-green-700 text-white">
                 <tr>
@@ -118,26 +98,6 @@
         </table>
     </div>
 
-    <!-- Combined Fund -->
-    <div class="mb-6 p-4 border rounded bg-gray-50">
-        <h4 class="text-lg lg:text-2xl font-semibold mb-2">Combined Fund</h4>
-        <table class="w-full border text-md lg:text-lg text-center">
-            <thead class="bg-blue-700 text-white">
-                <tr>
-                    <th class="border px-2 py-1">Year</th>
-                    <th class="border px-2 py-1">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                <template x-for="c in combined">
-                    <tr>
-                        <td class="border px-2 py-1" x-text="c.year"></td>
-                        <td class="border px-2 py-1 text-right" x-text="formatCurrency(c.total)"></td>
-                    </tr>
-                </template>
-            </tbody>
-        </table>
-    </div>
 
     <div class="text-center mt-6">
    <button 

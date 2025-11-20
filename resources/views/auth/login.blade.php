@@ -31,7 +31,7 @@
         <img src="{{ asset('images/clogo.png') }}" alt="Church Logo"
              class="absolute inset-0 w-full h-full object-cover opacity-20" />
         <div class="relative z-10 text-center">
-            <h1 class="text-2xl lg:text-3xl font-bold mb-4">Welcome to Shining Light</h1>
+            <h1 class="text-2xl lg:text-3xl font-bold mb-4">Welcome to Shining Light!</h1>
             <p class="text-xl lg:text-2xl mb-6">Sharing the light to the world</p>
             <p class="font-semibold italic text-base lg:text-lg">
                 “But the path of the just is as the shining light...” <br/>— Proverbs 4:18

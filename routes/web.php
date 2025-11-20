@@ -12,11 +12,9 @@ use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 Route::get('/', function () {
     if (Auth::check()) {
-        // Redirect based on role if needed, or just go to dashboard
         return redirect()->route('login');
     }
-    // return redirect()->route('login');
-    return view('auth.login'); // Show the login form
+    return view('auth.login');
 });
 
 
@@ -123,12 +121,13 @@ require __DIR__.'/auth.php';
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
-Route::get('login', function () {
-    return view('auth.login'); // Show the login form
-})->name('login');
+// Route::get('login', function () {
+    
+//     return view('auth.login'); // Show the login form
+// })->name('login');
 
 
-Route::post('login', [AuthenticatedSessionController::class, 'store']);
+// Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
@@ -194,6 +193,13 @@ Route::middleware(['auth'])->group(function () {
 require __DIR__.'/auth.php';
 // Authentication Routes
 Route::get('login', function () {
+    if (Auth::check()) {
+        $user = Auth::user();
+        if ($user->role === "Super Admin") {
+            return redirect('/superadmin/sadashboard');
+        }
+        return redirect('/admin/dashboard');
+    }
     return view('auth.login');
 })->name('login');
 
@@ -351,6 +357,7 @@ Route::get('/financial-report-print', [FinancialReportController::class, 'printR
 
 
 Route::get('/admin/events/{event}/edit', [EventController::class, 'edit'])->name('events.edit');
+Route::get('/admin/events/{event}/delete', [EventController::class, 'delete'])->name('events.delete');
 
 Route::post('/admin/events/bulk-delete', [EventController::class, 'bulkDelete'])->name('events.bulkDelete');
 
@@ -526,48 +533,15 @@ Route::prefix('admin')->middleware('auth')->group(function () {
 });
 
 
-// Route::get('/sse', function () {
-//     return view('sse');
-// });
-
-// use Illuminate\Support\Carbon;
-// Route::get('/events', function () {
-//     header('Content-Type: text/event-stream');
-//     header('Cache-Control: no-cache');
-//     header('Connection: keep-alive');
-
-//     for ($i = 0; $i < 10; $i++) {
-//         $events = [
-//             [
-//                 'title' => 'Prayer Meeting #' . ($i + 1),
-//                 'event_date' => Carbon::now('Asia/Manila')->addMinutes($i)->toDateTimeString(),
-//                 'status' => 'Ongoing',
-//             ],
-//             [
-//                 'title' => 'Youth Fellowship #' . ($i + 1),
-//                 'event_date' => Carbon::now('Asia/Manila')->addHours($i)->toDateTimeString(),
-//                 'status' => 'Upcoming',
-//             ],
-//         ];
-
-//         echo "data: " . json_encode([
-//             'events' => $events,
-//             'timestamp' => now()->toDateTimeString()
-//         ]) . "\n\n";
-
-//         ob_flush();
-//         flush();
-//         sleep(2);
-//     }
-
-//     echo "event: end\n";
-//     echo "data: Stream ended\n\n";
-//     ob_flush();
-//     flush();
-// });
-
-
-// Eto lang
 Route::get('/events', [EventController::class, 'stream']);
 
 Route::post('/upload-image', [CloudinaryController::class, 'uploadImage']);
+Route::post('/upload-pdf', [CloudinaryController::class, 'uploadPdf']);
+
+Route::post('/update-transparency', [AdminController::class, 'updateTransparency']);
+
+Route::post('/transfer-requests/disapprove', [BranchTransferController::class, 'disapprove'])
+    ->name('transfer-requests.disapprove');
+
+Route::post("/update-offering", [FinancialManagerController::class, "addOfferings"]);
+

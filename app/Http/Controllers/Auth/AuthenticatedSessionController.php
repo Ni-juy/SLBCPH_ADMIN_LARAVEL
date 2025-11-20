@@ -11,6 +11,23 @@ use Carbon\Carbon;
 
 class AuthenticatedSessionController extends Controller
 {
+
+         public function create(Request $request)
+       {
+           if (Auth::check()) {
+               \Log::info('User is logged in: ' . Auth::user()->username);  // Add this for debugging
+               $role = Auth::user()->role;
+               $redirect = match ($role) {
+                   'Super Admin' => route('superadmin.dashboard'),
+                   'Admin'       => route('admin.dashboard'),
+                   default       => route('dashboard'),
+               };
+               return redirect()->to($redirect);
+           }
+           \Log::info('User is not logged in');  // Add this
+           return view('auth.login');
+       }
+       
 public function store(LoginRequest $request)
 {
     $username = strtolower($request->username);

@@ -26,14 +26,11 @@ class CloudinaryController extends Controller
       ['folder' => 'profile_images']
     );
 
-    // Save only the secure_url in DB
     $user->update(['profile_image' => $uploadedFile['secure_url']]);
-
     return response()->json([
       'message' => 'Profile image updated successfully!',
       'url' => $uploadedFile['secure_url'],
     ]);
-
   }
 
   // public function uploadImage(Request $request)
@@ -82,6 +79,35 @@ class CloudinaryController extends Controller
         ], 500);
     }
 }
+
+  public function uploadPdf(Request $request)
+  {
+      try {
+          $file = $request->file('pdf');
+
+          if (!$file || !$file->isValid()) {
+              throw new \Exception('Invalid PDF upload.');
+          }
+
+          if ($file->getClientOriginalExtension() !== 'pdf') {
+              throw new \Exception('Only PDF files are allowed.');
+          }
+
+          $path = $file->store('uploaded_pdfs', 'public');
+          $url = Storage::url($path);
+
+          return response()->json([
+              'success' => true,
+              'pdf' => $url,
+          ]);
+      } catch (\Exception $e) {
+          return response()->json([
+              'success' => false,
+              'message' => $e->getMessage(),
+          ], 500);
+      }
+  }
+
 
   public function userUploadProfile(Request $request)
   {

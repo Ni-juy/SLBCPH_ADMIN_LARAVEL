@@ -7,10 +7,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Donation;
 use App\Models\Branch;
+use App\Models\Transparency;
 use App\Models\FundExpense;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Support\Facades\Auth;
+
 
 class FinancialReportController extends Controller
 {
@@ -569,5 +571,68 @@ $dompdf = new Dompdf($options);
         }
     }
 
+public function sendPDF(Request $request)
+{
+    $user = $request->user(); // Get logged-in user
+    $from = $request->input('from');
+    $to = $request->input('to');
 
+    // Generate PDF (reuse your PDF generation logic)
+    $pdf = PDF::loadView('reports.financial', compact('from', 'to'));
+
+    // Store PDF in user's account folder
+    $fileName = 'financial_report_'.$from.'_'.$to.'.pdf';
+    $path = $pdf->save(storage_path("app/user_reports/{$user->id}/{$fileName}"));
+
+    // Optionally save record in database
+    $user->reports()->create([
+        'file_name' => $fileName,
+        'path' => $path,
+        'from_date' => $from,
+        'to_date' => $to,
+    ]);
+
+    return response()->json(['success' => true]);
+}
+// Updated method for checking transparency report info
+public function getTransparencyInfo(Request $request)
+{
+    try {
+        // Authenticate user
+        if (!Auth::check()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $user = Auth::user();
+        $branchId = $request->query('id');
+
+        if (!$branchId) {
+            return response()->json(['error' => 'Branch ID is required'], 400);
+        }
+
+        // Ensure user belongs to the branch
+        if ($user->branch_id != $branchId) {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+
+        // Fetch the latest report for the branch (assuming only one per branch, or take the first)
+        $latestReport = Transparency::where('branch_id', $branchId)->first();
+
+        if (!$latestReport || !$latestReport->pdf_link) {
+            return response()->json([
+                'has_new' => false,
+                'pdf_link' => null
+            ]);
+        }
+
+        // Return the pdf_link (frontend will compare to localStorage)
+        return response()->json([
+            'has_new' => true, // Always true if exists; frontend handles comparison
+            'pdf_link' => $latestReport->pdf_link // e.g., '/storage/uploaded_pdfs/4bkYS7fRnoeNVdlju3akF2dHs4I...'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error fetching transparency info', ['error' => $e->getMessage()]);
+        return response()->json(['error' => 'Failed to fetch info'], 500);
+    }
+}
 }

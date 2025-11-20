@@ -58,10 +58,9 @@
             </div>
 
             <div class="mb-4">
-                <label class="block text-md md:text-base lg:text-lg font-medium text-gray-700">Upload Image
-                    (Optional):</label>
+                <label class="block text-md md:text-base lg:text-lg font-medium text-gray-700">Upload Image:</label>
                 <input type="file" accept="image/*" @change="fundExpense.image = $event.target.files[0]"
-                    class="mt-1 block w-full p-2 border border-gray-300 rounded">
+                    class="mt-1 block w-full p-2 border border-gray-300 rounded" required>
             </div>
 
             <!-- Submit Button -->
@@ -75,13 +74,7 @@
                 </div>
 
                 <!-- Batch Upload Button inside slip -->
-                <div class="mt-4">
-                    <button type="button"
-                        onclick="document.getElementById('expenseUploadModal').classList.remove('hidden'); document.getElementById('expenseUploadModal').classList.add('flex')"
-                        class="fund-btn px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700 transition flex-1 sm:flex-none">
-                        📁 Batch Upload Expenses
-                    </button>
-                </div>
+           
             </div>
 
             <style>
@@ -178,8 +171,13 @@
                             <td class="border px-4 py-2" x-text="formatDate(expense.date)"></td>
                             <td class="border px-4 py-2" x-text="expense.allocation?.partition?.category || 'N/A'"></td>
                             <td class="border px-4 py-2" x-text="expense.description"></td>
-                            <td class="border px-4 py-2 text-right"
-                                x-text="'₱' + parseFloat(expense.amount).toFixed(2)"></td>
+                            <td class="border px-4 py-2">
+                                <div class="flex justify-between w-full">
+                                    <span>₱</span>
+                                    <span x-text="parseFloat(expense.amount).toFixed(2)"></span>
+                                </div>
+                            </td>
+
                             <td class="border px-4 py-2">
                                 <template x-if="expense.image">
                                     <img :src="expense.image" alt="Expense Image"
@@ -237,7 +235,12 @@
                     <template x-for="(total, category) in categorySummary" :key="category">
                         <tr>
                             <td class="border px-4 py-2" x-text="category"></td>
-                            <td class="border px-4 py-2" x-text="'₱' + total.toFixed(2)"></td>
+                            <td class="border px-4 py-2">
+                                <div class="flex justify-between w-full">
+                                    <span>₱</span>
+                                    <span x-text="total.toFixed(2)"></span>
+                                </div>
+                            </td>
                         </tr>
                     </template>
                     <tr class="bg-red-100 text-red-800 font-bold border-t-2 border-red-400">
@@ -507,31 +510,31 @@
             totalExpenses: 0,
 
             // 🔹 Fetch Expenses
-          fetchExpenses() {
-            fetch('/fund-expenses/list')
-                .then(res => res.json())
-                .then(data => {
-                    // Sort latest created first
-                    this.expenses = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-                    this.filteredExpenses = [...this.expenses];
-                    this.currentPage = 1; // Reset to page 1
-                    this.calculateSummary();
-                    this.paginateExpenses();
-                });
-        },
+            fetchExpenses() {
+                fetch('/fund-expenses/list')
+                    .then(res => res.json())
+                    .then(data => {
+                        // Sort latest created first
+                        this.expenses = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                        this.filteredExpenses = [...this.expenses];
+                        this.currentPage = 1; // Reset to page 1
+                        this.calculateSummary();
+                        this.paginateExpenses();
+                    });
+            },
 
-        // 🔹 Filter by month
-        filterExpenses() {
-            if (this.selectedMonth === 'all') {
-                this.filteredExpenses = [...this.expenses];
-            } else {
-                this.filteredExpenses = this.expenses
-                    .filter(exp => new Date(exp.date).getMonth() + 1 === parseInt(this.selectedMonth))
-                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // latest created first
-            }
-            this.currentPage = 1; // Reset to page 1 after filter
-            this.paginateExpenses();
-        },
+            // 🔹 Filter by month
+            filterExpenses() {
+                if (this.selectedMonth === 'all') {
+                    this.filteredExpenses = [...this.expenses];
+                } else {
+                    this.filteredExpenses = this.expenses
+                        .filter(exp => new Date(exp.date).getMonth() + 1 === parseInt(this.selectedMonth))
+                        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // latest created first
+                }
+                this.currentPage = 1; // Reset to page 1 after filter
+                this.paginateExpenses();
+            },
 
 
             // 🔹 Paginate expenses

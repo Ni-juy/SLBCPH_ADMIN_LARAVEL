@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\Transparency;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Services\EmailVerificationService;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB; 
+
 
 class AdminController extends Controller
 {
@@ -28,6 +30,43 @@ class AdminController extends Controller
     {
         return view('admin.addadmin');
     }
+
+
+    public function updateTransparency(Request $request)
+    {
+        $branchId = Auth::user()->branch_id;
+
+        DB::beginTransaction();
+
+        try {
+            $transparency = Transparency::firstOrNew([
+                'branch_id' => $branchId
+            ]);
+
+            $transparency->pdf_link = $request->pdf_link;
+            $transparency->save(); 
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transparency PDF link updated successfully.',
+                'branch_id' => $branchId,
+                'pdf_link' => $request->pdf_link,
+                'data' => $transparency
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    
+
+
 public function store(Request $request, EmailVerificationService $emailVerifier)
 {
     \Log::info("📥 Admin store request received", [
@@ -416,4 +455,12 @@ public function setAsSuperAdmin(Request $request)
             'status' => $admin->status,
         ]);
     }
+
+    public function showUploadForm() {
+    return view('admin.upload'); // Blade form for admin
+}
+
+
+
+
 }

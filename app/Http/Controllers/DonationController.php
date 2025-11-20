@@ -636,314 +636,321 @@ public function store(Request $request)
 
         return response()->download($tempFile, $fileName)->deleteFileAfterSend(true);
     }
+public function batchUpload(Request $request)
+{
+    $isAjax = $request->ajax() || $request->wantsJson();
 
+    $request->validate([
+        'file' => 'required|mimes:xlsx,xls|max:2048',
+    ]);
 
-    public function batchUpload(Request $request)
-    {
-        $isAjax = $request->ajax() || $request->wantsJson();
+    $branchId = Auth::user()->branch_id;
+    $errors = [];
+    $processedRows = 0;
+    $successfulRows = 0;
 
-        $request->validate([
-            'file' => 'required|mimes:xlsx,xls|max:2048',
-        ]);
+    try {
+        $spreadsheet = IOFactory::load($request->file('file')->getPathname());
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, false, true);
 
-        $branchId = Auth::user()->branch_id;
-        $errors = [];
-        $processedRows = 0;
-        $successfulRows = 0;
+        if (count($rows) < 2) {
+            $message = 'The uploaded file is empty or missing headers.';
+            return $isAjax
+                ? response()->json(['success' => false, 'summary' => ['message' => $message]], 422)
+                : back()->with('error', $message);
+        }
 
-        try {
-            $spreadsheet = IOFactory::load($request->file('file')->getPathname());
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray(null, true, false, true);
+        // Map headers (using raw row[1])
+        $headerMap = [];
+        foreach ($rows[1] as $colLetter => $colName) {
+            $headerMap[strtolower(trim($colName ?? ''))] = $colLetter;
+        }
 
-            if (count($rows) < 2) {
-                $message = 'The uploaded file is empty or missing headers.';
-                return $isAjax
-                    ? response()->json(['success' => false, 'summary' => ['message' => $message]], 422)
-                    : back()->with('error', $message);
+        // Fetch offerings with children (subcategories)
+        $offerings = Offering::where('branch_id', $branchId)
+            ->with('children')
+            ->get();
+
+        // Map offerings by category lowercase for quick access
+        $offeringsMap = $offerings->mapWithKeys(fn($offering) => [strtolower($offering->category) => $offering]);
+
+        foreach ($rows as $index => $row) {
+            if ($index == 1)
+                continue; // skip header
+            $processedRows++;
+            $rowNumber = $index;
+            $memberName = trim($row['A'] ?? '');
+            $rawCellValue = $row['B'] ?? null;
+
+            if (!$memberName) {
+                $errors[] = ["row" => $rowNumber, "error" => "Member name is empty"];
+                Log::warning("Row {$rowNumber} skipped: Empty member name", ['branch_id' => $branchId]);
+                continue;
             }
 
-            // Map headers (using raw row[1])
-            $headerMap = [];
-            foreach ($rows[1] as $colLetter => $colName) {
-                $headerMap[strtolower(trim($colName ?? ''))] = $colLetter;
-            }
+            // --- Date parsing logic (same as your existing code) ---
+            try {
+                $dateObj = null;
+                $formattedValue = null;
+                $dateCell = $sheet->getCell('B' . $rowNumber);
+                $formattedValue = $dateCell->getFormattedValue();
 
-            // Fetch offerings with children (subcategories)
-            $offerings = Offering::where('branch_id', $branchId)
-                ->with('children')
-                ->get();
-
-            // Map offerings by category lowercase for quick access
-            $offeringsMap = $offerings->mapWithKeys(fn($offering) => [strtolower($offering->category) => $offering]);
-
-            foreach ($rows as $index => $row) {
-                if ($index == 1)
-                    continue; // skip header
-                $processedRows++;
-                $rowNumber = $index;
-                $memberName = trim($row['A'] ?? '');
-                $rawCellValue = $row['B'] ?? null;
-
-                if (!$memberName) {
-                    $errors[] = ["row" => $rowNumber, "error" => "Member name is empty"];
-                    Log::warning("Row {$rowNumber} skipped: Empty member name", ['branch_id' => $branchId]);
-                    continue;
+                if (is_numeric($rawCellValue) && $rawCellValue > 1) {
+                    $dateTime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($rawCellValue);
+                    $dateObj = Carbon::instance($dateTime);
+                } elseif (is_string($rawCellValue) && !empty($rawCellValue)) {
+                    $dateStr = trim($rawCellValue);
+                    try {
+                        $dateObj = Carbon::parse($dateStr);
+                    } catch (\Exception $e) {
+                        $formats = [
+                            'Y-m-d',
+                            'Y/m/d',
+                            'Y.m.d',
+                            'm-d-Y',
+                            'm/d/Y',
+                            'm.d.Y',
+                            'd-m-Y',
+                            'd/m/Y',
+                            'd.m.Y',
+                            'd-m-y',
+                            'd/m/y',
+                            'd.m.y',
+                            'm-d-y',
+                            'm/d/y',
+                            'm.d.y',
+                            'Y年m月d日',
+                            'Y年m月j日',
+                            'Y-m-d H:i:s',
+                            'Y-m-d H:i',
+                            'Y/m/d H:i:s',
+                            'Y/m/d H:i',
+                            'm-d-Y H:i:s',
+                            'm-d-Y H:i',
+                            'm/d/Y H:i:s',
+                            'm/d/Y H:i',
+                            'd-m-Y H:i:s',
+                            'd-m-Y H:i',
+                            'd/m/Y H:i:s',
+                            'd/m/Y H:i',
+                            'Y-m-d h:i:s A',
+                            'Y-m-d h:i A',
+                        ];
+                        foreach ($formats as $format) {
+                            try {
+                                $dateObj = Carbon::createFromFormat($format, $dateStr);
+                                if ($dateObj)
+                                    break;
+                            } catch (\Exception $e) {
+                                continue;
+                            }
+                        }
+                    }
+                    if (!$dateObj) {
+                        if (preg_match('/(\d{4})年(\d{1,2})月(\d{1,2})日/u', $dateStr, $matches)) {
+                            $dateObj = Carbon::createFromDate($matches[1], $matches[2], $matches[3])->startOfDay();
+                        } else {
+                            $normalizedDate = preg_replace('/[^\d\/\-\.\:\s]/u', '', $dateStr);
+                            $normalizedDate = preg_replace('/[\/\-\.]+/', '-', $normalizedDate);
+                            $normalizedDate = preg_replace('/[\s]+/', ' ', $normalizedDate);
+                            try {
+                                $dateObj = Carbon::parse($normalizedDate);
+                            } catch (\Exception $e) {
+                                $dateOnly = preg_replace('/[^\d\/\-\.]/u', '', $dateStr);
+                                $dateOnly = preg_replace('/[\/\-\.]+/', '-', $dateOnly);
+                                if (preg_match('/^\d{8}$/', $dateOnly)) {
+                                    $dateObj = Carbon::createFromFormat('Ymd', $dateOnly)->startOfDay();
+                                } elseif (strlen($dateOnly) > 8 && preg_match('/(\d{4})(\d{2})(\d{2})/', $dateOnly, $m)) {
+                                    $dateObj = Carbon::createFromFormat('Ymd', $m[1] . $m[2] . $m[3])->startOfDay();
+                                }
+                            }
+                        }
+                    }
                 }
 
-                // --- Date parsing logic (same as your existing code) ---
-                try {
-                    $dateObj = null;
-                    $formattedValue = null;
-                    $dateCell = $sheet->getCell('B' . $rowNumber);
-                    $formattedValue = $dateCell->getFormattedValue();
+                if (!$dateObj) {
+                    throw new \Exception("Unable to parse datetime: Raw='{$rawCellValue}', Formatted='{$formattedValue}'");
+                }
 
-                    if (is_numeric($rawCellValue) && $rawCellValue > 1) {
-                        $dateTime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($rawCellValue);
-                        $dateObj = Carbon::instance($dateTime);
-                    } elseif (is_string($rawCellValue) && !empty($rawCellValue)) {
-                        $dateStr = trim($rawCellValue);
-                        try {
-                            $dateObj = Carbon::parse($dateStr);
-                        } catch (\Exception $e) {
-                            $formats = [
-                                'Y-m-d',
-                                'Y/m/d',
-                                'Y.m.d',
-                                'm-d-Y',
-                                'm/d/Y',
-                                'm.d.Y',
-                                'd-m-Y',
-                                'd/m/Y',
-                                'd.m.Y',
-                                'd-m-y',
-                                'd/m/y',
-                                'd.m.y',
-                                'm-d-y',
-                                'm/d/y',
-                                'm.d.y',
-                                'Y年m月d日',
-                                'Y年m月j日',
-                                'Y-m-d H:i:s',
-                                'Y-m-d H:i',
-                                'Y/m/d H:i:s',
-                                'Y/m/d H:i',
-                                'm-d-Y H:i:s',
-                                'm-d-Y H:i',
-                                'm/d/Y H:i:s',
-                                'm/d/Y H:i',
-                                'd-m-Y H:i:s',
-                                'd-m-Y H:i',
-                                'd/m/Y H:i:s',
-                                'd/m/Y H:i',
-                                'Y-m-d h:i:s A',
-                                'Y-m-d h:i A',
-                            ];
-                            foreach ($formats as $format) {
-                                try {
-                                    $dateObj = Carbon::createFromFormat($format, $dateStr);
-                                    if ($dateObj)
-                                        break;
-                                } catch (\Exception $e) {
-                                    continue;
-                                }
-                            }
-                        }
-                        if (!$dateObj) {
-                            if (preg_match('/(\d{4})年(\d{1,2})月(\d{1,2})日/u', $dateStr, $matches)) {
-                                $dateObj = Carbon::createFromDate($matches[1], $matches[2], $matches[3])->startOfDay();
-                            } else {
-                                $normalizedDate = preg_replace('/[^\d\/\-\.\:\s]/u', '', $dateStr);
-                                $normalizedDate = preg_replace('/[\/\-\.]+/', '-', $normalizedDate);
-                                $normalizedDate = preg_replace('/[\s]+/', ' ', $normalizedDate);
-                                try {
-                                    $dateObj = Carbon::parse($normalizedDate);
-                                } catch (\Exception $e) {
-                                    $dateOnly = preg_replace('/[^\d\/\-\.]/u', '', $dateStr);
-                                    $dateOnly = preg_replace('/[\/\-\.]+/', '-', $dateOnly);
-                                    if (preg_match('/^\d{8}$/', $dateOnly)) {
-                                        $dateObj = Carbon::createFromFormat('Ymd', $dateOnly)->startOfDay();
-                                    } elseif (strlen($dateOnly) > 8 && preg_match('/(\d{4})(\d{2})(\d{2})/', $dateOnly, $m)) {
-                                        $dateObj = Carbon::createFromFormat('Ymd', $m[1] . $m[2] . $m[3])->startOfDay();
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (!$dateObj) {
-                        throw new \Exception("Unable to parse datetime: Raw='{$rawCellValue}', Formatted='{$formattedValue}'");
-                    }
-
-                    if ($dateObj->startOfDay()->isFuture()) {
-                        $errors[] = ['row' => $rowNumber, 'error' => "Date cannot be in the future"];
-                        Log::warning("Row {$rowNumber} skipped: Future date", [
-                            'branch_id' => $branchId,
-                            'member' => $memberName,
-                            'date_raw' => $rawCellValue,
-                            'date_formatted' => $formattedValue,
-                            'parsed_datetime' => $dateObj->format('Y-m-d H:i:s')
-                        ]);
-                        continue;
-                    }
-
-                    $date = $dateObj->format('Y-m-d H:i:s');
-                } catch (\Exception $e) {
-                    $errors[] = ["row" => $rowNumber, "error" => "Invalid datetime format: " . $e->getMessage()];
-                    Log::warning("Row {$rowNumber} skipped: Invalid datetime format", [
+                if ($dateObj->startOfDay()->isFuture()) {
+                    $errors[] = ['row' => $rowNumber, 'error' => "Date cannot be in the future"];
+                    Log::warning("Row {$rowNumber} skipped: Future date", [
                         'branch_id' => $branchId,
                         'member' => $memberName,
                         'date_raw' => $rawCellValue,
-                        'date_formatted' => $formattedValue ?? 'N/A',
-                        'parse_error' => $e->getMessage()
+                        'date_formatted' => $formattedValue,
+                        'parsed_datetime' => $dateObj->format('Y-m-d H:i:s')
                     ]);
                     continue;
                 }
 
-                // --- Member Lookup (case-insensitive) ---
+                $date = $dateObj->format('Y-m-d H:i:s');
+            } catch (\Exception $e) {
+                $errors[] = ["row" => $rowNumber, "error" => "Invalid datetime format: " . $e->getMessage()];
+                Log::warning("Row {$rowNumber} skipped: Invalid datetime format", [
+                    'branch_id' => $branchId,
+                    'member' => $memberName,
+                    'date_raw' => $rawCellValue,
+                    'date_formatted' => $formattedValue ?? 'N/A',
+                    'parse_error' => $e->getMessage()
+                ]);
+                continue;
+            }
+
+            // --- Member Lookup (handle Anonymous/Visitor or regular members) ---
+            $user = null;
+            if (strtolower($memberName) === 'anonymous' || strtolower($memberName) === 'visitor') {
+                $anonymousUserId = 31; // Assuming 31 is the anonymous user ID
+                $user = User::find($anonymousUserId);
+            } else {
                 $user = User::where('role', 'member')
                     ->where('branch_id', $branchId)
                     ->whereRaw("LOWER(CONCAT(first_name,' ',last_name)) = ?", [strtolower($memberName)])
                     ->first();
+            }
 
-                if (!$user) {
-                    $errors[] = ["row" => $rowNumber, "error" => "Member '{$memberName}' not found in your branch"];
-                    Log::warning("Row {$rowNumber} skipped: Member not found", [
-                        'branch_id' => $branchId,
-                        'member' => $memberName
-                    ]);
-                    continue;
-                }
+            if (!$user) {
+                $errors[] = ["row" => $rowNumber, "error" => "Member '{$memberName}' not found in your branch"];
+                Log::warning("Row {$rowNumber} skipped: Member not found", [
+                    'branch_id' => $branchId,
+                    'member' => $memberName
+                ]);
+                continue;
+            }
 
-                // --- Validate Amounts and check at least one amount > 0 ---
-                $validatedAmounts = [];
-                $hasAmount = false;
-                foreach ($offeringsMap as $catLower => $offering) {
-                    if (isset($headerMap[$catLower])) {
-                        $amount = floatval($row[$headerMap[$catLower]] ?? 0);
-                        $validatedAmounts[$catLower] = $amount;
-                        if ($amount > 0)
-                            $hasAmount = true;
-                    }
-                }
-
-                if (!$hasAmount) {
-                    $errors[] = ["row" => $rowNumber, "error" => "No amounts provided"];
-                    Log::warning("Row {$rowNumber} skipped: No amounts provided", [
-                        'branch_id' => $branchId,
-                        'member' => $memberName
-                    ]);
-                    continue;
-                }
-// --- Calculate total amount (main offerings only) ---
-$totalAmount = 0;
-foreach ($offerings as $offering) {
-    $key = strtolower($offering->category);
-    $mainAmount = $validatedAmounts[$key] ?? 0;
-    $totalAmount += $mainAmount;
-}
-
-// --- Precompute subcategory amounts for allocation ---
-$subAmounts = [];
-foreach ($offerings as $offering) {
-    $parentKey = strtolower($offering->category);
-    $parentAmount = $validatedAmounts[$parentKey] ?? 0;
-    foreach ($offering->children as $child) {
-        $key = strtolower($child->category);
-        $subAmounts[$key] = $parentAmount * 0.10; // Adjust percentage if needed
-    }
-}
-
-                // --- Insert Donation and allocations ---
-                DB::beginTransaction();
-                try {
-                    // Parent donation
-                    $parentDonation = Donation::create([
-                        'user_id' => $user->id,
-                        'offering_id' => null,
-                        'amount' => $totalAmount,
-                        'date' => $date,
-                        'branch_id' => $branchId,
-                    ]);
-
-                    // Child donations
-                    foreach ($offerings as $offering) {
-                        $key = strtolower($offering->category);
-                        $amount = $validatedAmounts[$key] ?? 0;
-                        if ($amount > 0) {
-                            Donation::create([
-                                'user_id' => $user->id,
-                                'offering_id' => $offering->id,
-                                'amount' => $amount,
-                                'date' => $date,
-                                'branch_id' => $branchId,
-                                'parent_donation_id' => $parentDonation->id,
-                            ]);
-                        }
-                    }
-
-                    // Allocations with subcategories considered
-                    $partitions = Partition::where('branch_id', $branchId)->get();
-                    foreach ($partitions as $partition) {
-                        preg_match('/\$(.*?)\$/', $partition->description, $matches);
-                        $includedCategories = !empty($matches[1])
-                            ? array_map(fn($c) => strtolower(trim($c)), explode(',', $matches[1]))
-                            : [];
-
-                        $baseAmount = 0;
-                        foreach ($includedCategories as $cat) {
-                            if (isset($subAmounts[$cat])) {
-                                $baseAmount += $subAmounts[$cat];
-                            } else {
-                                $baseAmount += floatval($validatedAmounts[$cat] ?? 0);
-                            }
-                        }
-
-                        $allocatedAmount = $baseAmount * (floatval($partition->partition) / 100);
-
-                        if ($allocatedAmount > 0) {
-                            DonationAllocation::create([
-                                'donation_id' => $parentDonation->id,
-                                'partition_id' => $partition->id,
-                                'allocated_amount' => $allocatedAmount,
-                                'allocation_date' => $date,
-                            ]);
-                        }
-                    }
-
-                    DB::commit();
-                    $successfulRows++;
-
-                } catch (\Exception $e) {
-                    DB::rollBack();
-                    $errors[] = ["row" => $rowNumber, "error" => "Failed to insert donation"];
-                    Log::error("Row {$rowNumber} failed: Donation insert error", [
-                        'branch_id' => $branchId,
-                        'member' => $memberName,
-                        'error' => $e->getMessage()
-                    ]);
+            // --- Validate Amounts and check at least one amount > 0 ---
+            $validatedAmounts = [];
+            $hasAmount = false;
+            foreach ($offeringsMap as $catLower => $offering) {
+                if (isset($headerMap[$catLower])) {
+                    $amount = floatval($row[$headerMap[$catLower]] ?? 0);
+                    $validatedAmounts[$catLower] = $amount;
+                    if ($amount > 0)
+                        $hasAmount = true;
                 }
             }
 
-            $summary = [
-                'total_rows' => $processedRows,
-                'successful_rows' => $successfulRows,
-                'failed_rows' => count($errors),
-                'failures' => $errors
-            ];
+            if (!$hasAmount) {
+                $errors[] = ["row" => $rowNumber, "error" => "No amounts provided"];
+                Log::warning("Row {$rowNumber} skipped: No amounts provided", [
+                    'branch_id' => $branchId,
+                    'member' => $memberName
+                ]);
+                continue;
+            }
 
-            return $isAjax
-                ? response()->json([
-                    'success' => $successfulRows > 0,
-                    'summary' => $summary
-                ])
-                : back()->with('summary', $summary);
+            // --- Calculate total amount (main offerings only) ---
+            $totalAmount = 0;
+            foreach ($offerings as $offering) {
+                $key = strtolower($offering->category);
+                $mainAmount = $validatedAmounts[$key] ?? 0;
+                $totalAmount += $mainAmount;
+            }
 
-        } catch (\Exception $e) {
-            $errorMessage = "Upload failed: {$e->getMessage()}";
-            return $isAjax
-                ? response()->json(['success' => false, 'summary' => ['message' => $errorMessage]], 500)
-                : back()->with('error', $errorMessage);
+            // --- Precompute subcategory amounts for allocation ---
+            $subAmounts = [];
+            foreach ($offerings as $offering) {
+                $parentKey = strtolower($offering->category);
+                $parentAmount = $validatedAmounts[$parentKey] ?? 0;
+                foreach ($offering->children as $child) {
+                    $key = strtolower($child->category);
+                    $percentage = $child->percentage ?? 0.10; // Use dynamic percentage like in store method
+                    $subAmounts[$key] = $parentAmount * $percentage;
+                }
+            }
+
+            // --- Insert Donation and allocations ---
+            DB::beginTransaction();
+            try {
+                // Parent donation
+                $parentDonation = Donation::create([
+                    'user_id' => $user->id,
+                    'offering_id' => null,
+                    'amount' => $totalAmount,
+                    'date' => $date,
+                    'branch_id' => $branchId,
+                ]);
+
+                // Child donations
+                foreach ($offerings as $offering) {
+                    $key = strtolower($offering->category);
+                    $amount = $validatedAmounts[$key] ?? 0;
+                    if ($amount > 0) {
+                        Donation::create([
+                            'user_id' => $user->id,
+                            'offering_id' => $offering->id,
+                            'amount' => $amount,
+                            'date' => $date,
+                            'branch_id' => $branchId,
+                            'parent_donation_id' => $parentDonation->id,
+                        ]);
+                    }
+                }
+
+                // Allocations with subcategories considered
+                $partitions = Partition::where('branch_id', $branchId)->get();
+                foreach ($partitions as $partition) {
+                    preg_match('/\((.*?)\)/', $partition->description, $matches); // Fixed to match store method
+                    $includedCategories = !empty($matches[1])
+                        ? array_map(fn($c) => strtolower(trim($c)), explode(',', $matches[1]))
+                        : [];
+
+                    $baseAmount = 0;
+                    foreach ($includedCategories as $cat) {
+                        if (isset($subAmounts[$cat])) {
+                            $baseAmount += $subAmounts[$cat];
+                        } else {
+                            $baseAmount += floatval($validatedAmounts[$cat] ?? 0);
+                        }
+                    }
+
+                    $allocatedAmount = $baseAmount * (floatval($partition->partition) / 100);
+
+                    if ($allocatedAmount > 0) {
+                        DonationAllocation::create([
+                            'donation_id' => $parentDonation->id,
+                            'partition_id' => $partition->id,
+                            'allocated_amount' => $allocatedAmount,
+                            'allocation_date' => $date,
+                        ]);
+                    }
+                }
+
+                DB::commit();
+                $successfulRows++;
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                $errors[] = ["row" => $rowNumber, "error" => "Failed to insert donation"];
+                Log::error("Row {$rowNumber} failed: Donation insert error", [
+                    'branch_id' => $branchId,
+                    'member' => $memberName,
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
+
+        $summary = [
+            'total_rows' => $processedRows,
+            'successful_rows' => $successfulRows,
+            'failed_rows' => count($errors),
+            'failures' => $errors
+        ];
+
+        return $isAjax
+            ? response()->json([
+                'success' => $successfulRows > 0,
+                'summary' => $summary
+            ])
+            : back()->with('summary', $summary);
+
+    } catch (\Exception $e) {
+        $errorMessage = "Upload failed: {$e->getMessage()}";
+        return $isAjax
+            ? response()->json(['success' => false, 'summary' => ['message' => $errorMessage]], 500)
+            : back()->with('error', $errorMessage);
     }
+}
+
 }
